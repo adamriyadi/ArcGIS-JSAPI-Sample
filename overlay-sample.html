@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=7, IE=9, IE=10">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no"/>
+    <title>Overlaying with PictureMarkerSymbol</title>
+    <link rel="stylesheet" href="http://js.arcgis.com/3.6/js/esri/css/esri.css">
+    <style>
+      html, body, #map {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background-color: #FFF;
+        overflow: hidden;
+        font-family: "Trebuchet MS";
+      }
+    </style>
+    <script src="http://js.arcgis.com/3.6/"></script>
+    <script>
+		var map, transparentSymbol, pictureSymbol, pictureOverlayLayer, picturePoint, pictureGraphic, extentGraphicLayer, extentOverlay, 
+		extentGraphic, dojoShape, moveable, moveStopToken, firstInit, initial_width, initial_height, picture_width, picture_height;
+
+		require([
+			"dojo/_base/connect",
+			"dojo/_base/Color",
+			"dojox/gfx/Moveable",
+			"esri/symbols/SimpleFillSymbol",
+			"esri/symbols/SimpleLineSymbol",
+			"esri/symbols/PictureMarkerSymbol",
+			"esri/layers/GraphicsLayer",
+			"esri/graphic",
+			"esri/geometry/Extent",
+			"esri/geometry/Point",
+			"esri/map", 
+			"dojo/domReady!"], function(
+				connect,
+				Color,
+				Moveable,
+				SimpleFillSymbol,
+				SimpleLineSymbol,
+				PictureMarkerSymbol,
+				GraphicsLayer,
+				Graphic,
+				Extent,
+				Point,
+				Map) {
+			
+			firstInit = true;
+
+			map = new Map("map", {
+				basemap: "topo",
+				center: [-122.45,37.75], // long, lat
+				zoom: 13,
+				sliderStyle: "small"
+			});
+
+			map.on("load", mapLoad);
+			map.on("update-end", updateEnd);
+			map.on("extent-change", extentChange);
+
+			transparentSymbol = new SimpleFillSymbol(SimpleFillSymbol.STYLE_SOLID,
+						new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([0,0,0,0]), 1),
+						new Color([255,255,255,0])
+					);
+			
+			picture_width = 685;
+			picture_height = 332;
+			pictureSymbol = new PictureMarkerSymbol("image/overlay.png", picture_width, picture_height);
+
+			extentGraphicLayer = new GraphicsLayer();
+			pictureOverlayLayer = new GraphicsLayer();
+
+			extentOverlay = new Extent({
+				"xmin"	: -122.502099227903,
+				"ymin"	: 37.736357791231,
+				"xmax"	: -122.384854507444,
+				"ymax"	: 37.7813471858105,
+				"spatialReference" : {"wkid":4326}
+				});
+			extentGraphic = new Graphic(extentOverlay, transparentSymbol);
+			extentGraphicLayer.add(extentGraphic);
+
+			map.addLayers([extentGraphicLayer, pictureOverlayLayer]);
+			
+			function extentChange() {
+				if (typeof pictureGraphic !== 'undefined')
+				{
+
+					var screenPoint1 = map.toScreen(new Point(extentOverlay.xmin, extentOverlay.ymin));
+					var screenPoint2 = map.toScreen(new Point(extentOverlay.xmax, extentOverlay.ymax));
+
+					width = Math.abs((screenPoint2.x - screenPoint1.x));
+					height = Math.abs((screenPoint1.y - screenPoint2.y));
+
+					new_width = width / (initial_width / picture_width);
+					new_height = height / (initial_height / picture_height);
+
+					pictureSymbol.setWidth(new_width);
+					pictureSymbol.setHeight(new_height);
+
+					if (pictureGraphic.getDojoShape() != null)
+					{
+						connect.disconnect(moveStopToken);
+
+						dojoShape = pictureGraphic.getDojoShape();
+						moveable = new Moveable(dojoShape);
+
+						moveStopToken = connect.connect(moveable, "onMoveStop", moveStop);
+					}
+				}
+			}
+
+			function updateEnd() {
+				if (firstInit && typeof pictureGraphic !== 'undefined')
+				{
+					if (pictureGraphic.getDojoShape() != null)
+					{
+						var screenPoint1 = map.toScreen(new Point(extentOverlay.xmin, extentOverlay.ymin));
+						var screenPoint2 = map.toScreen(new Point(extentOverlay.xmax, extentOverlay.ymax));
+						
+						initial_width = Math.abs((screenPoint2.x - screenPoint1.x));
+						initial_height = Math.abs((screenPoint1.y - screenPoint2.y));
+
+						dojoShape = pictureGraphic.getDojoShape();
+						moveable = new Moveable(dojoShape);
+						
+						moveStopToken = connect.connect(moveable, "onMoveStop", moveStop);
+						
+						firstInit = false;
+					}
+				}
+			}
+
+			function mapLoad(map) {
+				picturePoint = extentOverlay.getCenter();
+				pictureGraphic = new Graphic(picturePoint, pictureSymbol);
+
+				pictureOverlayLayer.add(pictureGraphic);
+				pictureOverlayLayer.setOpacity(0.6);
+			}
+
+			function moveStop(mover) {
+				var tx = dojoShape.getTransform();
+
+				var startPoint = pictureGraphic.geometry;
+				var endPoint = map.toMap(map.toScreen(startPoint).offset(tx.dx, tx.dy));
+				dojoShape.setTransform(null);
+
+				pictureGraphic.setGeometry(endPoint);
+			}
+
+		});
+    </script>
+  </head>
+
+  <body>
+    <div id="map"></div>
+  </body>
+</html>
